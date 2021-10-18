@@ -1,0 +1,778 @@
+/*
+            ОПИСАНИЕ СТУДЕНЧЕСКОЙ КУРСОВОЙ РАБОТЫ
+                   "Разработка транслятора"
+
+ВВЕДЕНИЕ
+
+ Учебный транслятор языка МИЛАН служит основой курсовой работы
+по курсу "Теория алгоритмов и автоматов". МИЛАН (mini language)
+- язык программирования высокого уровня. Транслятор написан на
+языке Си и легко переносится на любую систему, для которой
+существует компилятор Си, поддерживающий стандарт ANSI C.
+Трансляция производится на язык команд абстрактной стековой
+машины. Курсовая работа состоит в том, что студенты
+должны изменить язык МИЛАН, внеся в него новые управляющие
+конструкции и типы данных в соответствии с заданием, и
+для этого нового "своего" языка построить "свой"
+транслятор, используя разработанный учебный транслятор в
+качестве примера и основы для своей разработки. Фактически
+студент должен модифицировать учебный базовый транслятор
+(и, возможно, систему команд объектной стековой машины), получив
+в результате новый язык и транслятор. Основанием для
+зачета студенту курсовой работы служит наличие работающего
+транслятора.
+
+Преимущества такого подхода к обучению разработке сложных
+системных программ очевидны: студент освобождается от
+необходимости выполнения большой  работы по программированию
+рутинных задач, и в то же время для разработки своего
+транслятора он должен сознательно внести изменения в
+существующую программную систему. Для этого он должен глубоко
+понять ее и следовать ее стилю и методике построения.
+
+Начальные сведения по теории формальных грамматик,
+синтаксически-ориентированному подходу к разработке
+трансляторов, описание языка МИЛАН, проблемы и методы построения
+лексического анализатора и синтаксический анализ языков методом
+рекурсивного спуска - все это изложено в пособии: Ю.Г.Карпов
+"Основы построения компиляторов", ЛПИ, 1982. Предполагается, что
+студент знаком с излагаемым там материалом.
+
+ЯЗЫК МИЛАН
+
+Язык  МИЛАН - примитивный паскалеподобный язык с одним типом
+данных - целыми числами. Он включает в себя работу с
+переменными: считывание значения с терминала, вывод
+значения на терминал, присваивание. Реализованы
+вычисение арифметических выражений с четырьмя основными
+действиями и скобками любого уровня вложенности, а также
+следующие управляющие конструкции: условный оператор (IF - THEN,
+IF - THEN- ELSE) и оператор цикла (WHILE). Управляющие
+конструкции могут иметь любую глубину вложенности. Текст
+программы может содержать комментарии.
+
+Грамматика языка МИЛАН можт быть представлена в форме
+синтаксических диаграмм для трансляции по методу рекурсивного
+спуска. Трансляция программ на МИЛАНЕ осуществляется в два этапа.
+Первый - лексический анализ. Текст программы подается на вход
+лексического анализатора, который преобразовывает программу в
+поток лексем и строит таблицы констант и переменных. Эту
+последовательность лексем обрабатывает синтаксический
+анализатор, построенный по методу рекурсивного спуска.
+Одновременно с распознаванием входного текста (переведенного
+предварительно в поток лексем) синтаксический анализатор
+выполняет семантические вычисления, в результате которых и
+строится выходная программа для стековой машины. При
+возникновении ошибки на любом из этапов трансляции выдается
+сообщение с указанием типа ошибки и трансляция прерывается.
+
+ЛЕКСИЧЕСКИЙ АНАЛИЗАТОР
+
+Лексический анализатор основан на небольшой автоматной
+грамматике. Ключевые слова распознаются с помощью линейного
+поиска в таблице ключевых слов.
+
+Резервированные слова языка МИЛАН перечислены ниже:
+BEGIN, END, IF, THEN, ELSE, FI, WHILE, DO, OD, READ, WRITE.
+
+Кроме служебных слов лексический анализатор должен распознать
+такие символы и группы символов, как идентификаторы, константы,
+арифметические операции, операторы чтения, печати и
+присваивания и т.д. Все они переводятся в лексемы во внутреннем
+представлении программы. Лексемы - это пара <тип,номер>, где тип
+лексемы представлен перечислимым типом языка С. Служебные слова
+этого перечислимого типа кодируются именами, совпадающими по
+написанию со служебными словами; остальные лексемы имеют
+следующие имена в этом перечислимом типе:
+
+        IDENTIFIER,      - любой идентификатор
+        CONST,           - любая константа
+        LEFT_BRACKET,    - левая скобка   (
+        RIGHT_BRACKET,   - правая скобка  )
+        ADD_SUB,         - операция типа сложения. т.е. +,-
+        MULT_DIV,        - операция типа умножения. т.е. *,/
+        RELATION,        - все символы операции отношения: >,<,=, ...
+        ASSIGN,          - операция присваивания :=
+        SEMICOLON        - символ ;
+
+Должно быть ясно, что любая входная программа, обработанная
+лексическим анализатором, будет представлена последовательностью
+таких лексем, и именно эти лексемы составляют терминальный
+словарь грамматики языка МИЛАН на входе синтаксического
+анализатора.
+
+Лексический анализатор построен по классической схеме реализации
+конечного распознающего автомата для автоматной грамматики,
+описывающей лексемы. Выходом лексического анализатора являются:
+
+а) таблица лексем. Эта таблица - просто массив пар <тип
+лексемы, номер>. Она названа в программе на С TOKENS[ ]
+c максимальным размером TOKEN_MAX. Текущее количество лексем в
+этом массиве учитывает счетчик TokenCounter; он же по окончании
+работы лексического анализатора хранит длину потока лексем;
+
+б) таблица имен. Все распознанные идентификаторы помещаются в
+таблицу  char IDENTIFIERS[], которая является массивом символьных
+строк. Максимальная длина массива - VARIABLE_MAX, текущая длина
+(и окончательное число различных идентификаторов в исходной
+программе на МИЛАНЕ) хранится в переменной IdentifiersCount,
+которая вначале полагается 0. Длина хранящегося идентификатора
+полагается не более, чем величина, хранящаяся в константе
+MaxIdLength.  Если идентификатор в исходной программе имеет
+длину, большую MaxIdLength, то несмотря на то, что лексический
+анализатор распознает во входной программе идентификатор
+целиком, его часть, превышающая MaxIdLength, отбрасывается.
+
+
+в) таблица констант.  Все распознанные константы помещаются в
+таблицу  int CONSTANTS[], которая является массивом целых.
+Максимальная длина массива - CONST_MAX, текущая
+длина (и окончательное число различных констант в
+исходной программе на МИЛАНЕ) хранится в переменной
+NumberOfConstants, которая вначале полагается 0.
+
+Работа программы лексического анализатора полностью
+соответствует алгоритму, описанному в указанном выше пособии.
+Интерес представляет только распознавание и обработка служебных
+слов. После того, как распознано имя во входном потоке, т.е.
+последовательность букв и цифр, начинающаяся с буквы, это имя
+поочередно сравнивается со всеми символьными строками - первыми
+компонентами пар массива RESERVED_WORDS:
+  {
+    { "BEGIN", BEGIN },
+    { "END",   END   },
+    ...
+
+    { "WRITE", WRITE }
+  }.
+
+Вторые компоненты этих пар - это как раз элементы
+перечислимого типа ТТоkenType, соответствующие внутренним
+кодировкам соответствующих служебных слов в виде кода лексем.
+Если сравнение дало положительный результат, т.е. имя во
+входной программе совпало с данным служебным словом, то в
+выходной поток лексем выдается вторая компонента пары -
+соответствующий код лексемы.
+
+Поток лексем во внутреннем представлении - это просто
+последовательность пар целых чисел. Для проверки правильности
+работы лексического анализатора удобно преобразовать эти
+целые в удобочитаемую форму. Для этого используется
+специальная программа PrintTokenProgram (), работающая с
+массивом пар:
+
+  TOKEN_TYPES[] =
+  {
+    { "BEGIN",      BEGIN      },
+    { "END",        END        },
+      ...
+
+    { "WRITE",      WRITE      },
+    { "IDENTIFIER", IDENTIFIER },
+    { "CONST",      CONST      },
+       ...
+
+    { "ASSIGN",     ASSIGN     },
+    { "SEMICOLON",  SEMICOLON  }
+  }.
+
+Каждый элемент массива - это пара констант: {символьная строка,
+код лексемы}.  Программа PrintTokenProgram () для каждой лексемы
+в построенном выходном массиве лексем сравнивает ее код со
+вторым элементом пар массива TOKEN_TYPES и если коды совпадают,
+выдает символьное название этой лексемы.
+
+
+СИНТАКСИЧЕСКИЙ АНАЛИЗАТОР
+
+Синтаксический анализатор построен по методу рекурсивного
+спуска. Это означает, что по грамматике входного языка,
+представленной в виде набора синтаксических диаграмм, для каждой
+грамматической конструкции (нетерминала) строится рекурсивная
+распознающая программа, вызывающая другие программы,
+соответствующие встреченным в синтаксической диаграмме
+нетерминалам. Входная программа представлена в виде потока
+лексем, следовательно именно лексемы являются терминальными
+символами грамматики распознаваемого языка. Синтаксическому
+анализатору  доступны также таблицы идентификаторов и констант,
+а также их количества в исходной программе.
+
+В процессе распознавания в распознающих процедурах,
+соответствующих нетерминалам, выполняются семантические
+действия, целью которых является генерация выходной программы на
+языке стековой машины. Таких команд немного, они имеют очевидную
+семантику:
+
+      STOP  a,
+      LOAD  a,
+      STORE,
+      INVERT,
+      ADD,
+      SUB,
+      MULT,
+      DIV,
+      COMPARE,
+      JUMP,
+      JUMP_YES,
+      JUMP_NO,
+      INPUT,
+      PRINT.
+
+При необходимости студент может ввести дополнительные команды
+для трансляции более сложных, чем в языке МИЛАН конструкций.
+
+Так же, как и поток лексем, последовательность команд стековой
+машины может быть представлена в символьной форме. Это делает
+программа PrintStackMachineProgram().
+
+ВАРИАНТЫ МОДИФИКАЦИИ И РАСШИРЕНИЯ ЯЗЫКА МИЛАН
+
+Студентам предлагается модифицировать компилятор так, чтобы он
+мог транслировать программы языка МИЛАН с заданной
+комбинацией следующих дополнений:
+
+1. Ввести цикл REPEAT UNTIL;
+2. Ввести цикл FOR i:= <E1> TO <E2> DO <L> OD;
+3. Ввести цикл FOR i:= <E1> DOWNTO <E2> DO <L> OD;
+4. Ввести цикл FOR i:= <E1>,<E2>...<En> DO <L> OD;
+5. Ввести оператор ВREAK;
+6. Ввести оператор ASSERT <B>;
+7. Ввести оператор форматной печати, аналогичный таковому в
+Паскале;
+8. Ввести логические операции типа Е1<E2 & E3>E4;
+9. Ввести описания переменных и блочную структуру;
+10.Ввести типы float и int c различной длиной поля;
+11.Ввести логический тип переменных т логические операции;
+12.Ввести перечислимый тип данных;
+13.Ввести символьный тип данных и операции над этими данными;
+14.Ввести процедуры;
+15.Ввести функции.
+
+*/
+
+/*---------------Recursive descent compiler ---------------------*/
+
+#  include <stdio.h>
+#  include <ctype.h>
+#  include <string.h>
+
+/*-------------- Limits ------------------------------------------*/
+
+#define VAR_MAX        100
+#define CONST_MAX      100
+#define TOKEN_MAX      500
+#define PROGRAM_MAX    500
+
+/*--------------------- Types Definition --------------------------*/
+
+/* BOOL */
+typedef enum
+   {
+   FALSE,
+   TRUE
+   }
+   BOOL;
+
+typedef enum
+  {
+        BEGIN,                 // Reserved words
+        END,
+        IF,
+        THEN,
+        ELSE,
+        FI,
+        WHILE,
+        DO,
+        OD,
+        READ,
+        WRITE,
+
+	IDENTIFIER,
+	CONST,
+	LEFT_BRACKET,		//   (
+	RIGHT_BRACKET,		//   )
+        ADD_SUB,                //   +,-
+        MULT_DIV,               //   *,/
+	RELATION,		//   >,<,=, ...
+	ASSIGN,			//   :=
+        SEMICOLON               //   ;
+  }
+   TTokenType;
+
+typedef struct
+  {
+      TTokenType TokenType;
+      unsigned   Number;
+  }
+   TToken;
+
+typedef enum
+   {
+      STOP,
+      LOAD,
+      STORE,
+      INVERT,
+      ADD,
+      SUB,
+      MULT,
+      DIV,
+      COMPARE,
+      JUMP,
+      JUMP_YES,
+      JUMP_NO,
+      INPUT,
+      PRINT
+   }
+   TOperation;   // Stack machine operations
+
+typedef struct
+  {
+      TOperation  Operation;
+      unsigned    Address;
+  }
+   TCommand;     // Stack machine commands
+
+
+/*--------------------------  Tables ----------------------------*/
+
+TToken TOKENS[ TOKEN_MAX ];      // input program as a sequence of tokens
+unsigned TokenCounter = 0;
+
+int VARIABLES[ VAR_MAX ];        // Table of program variables
+unsigned NumberOfVariables = 0;
+
+int CONSTANTS[ CONST_MAX ];
+unsigned NumberOfConstants = 0;   // Table of program constants
+
+TCommand OUTPUT_PROGRAM[ PROGRAM_MAX ]; // Resulting program for stack machine
+unsigned ProgramCounter = 0;
+
+/*-------------------------- String - code pairs (for printing) ---------*/
+
+struct
+  {
+  char*      Name;
+  TTokenType Type;
+  }
+  RESERVED_WORDS[] =
+  {
+    { "BEGIN", BEGIN },
+    { "END",   END   },
+    { "IF",    IF    },
+    { "THEN",  THEN  },
+    { "ELSE",  ELSE  },
+    { "FI",    FI    },
+    { "WHILE", WHILE },
+    { "DO",    DO    },
+    { "OD",    OD    },
+    { "READ",  READ  },
+    { "WRITE", WRITE }
+  };
+int ReservedWordsNumber = sizeof( RESERVED_WORDS ) / sizeof( RESERVED_WORDS[0] );
+
+struct
+  {
+  char*      Name;
+  TTokenType Type;
+  }
+  TOKEN_TYPES[] =
+  {
+    { "BEGIN",      BEGIN      },
+    { "END",        END        },
+    { "IF",         IF         },
+    { "THEN",       THEN       },
+    { "ELSE",       ELSE       },
+    { "FI",         FI         },
+    { "WHILE",      WHILE      },
+    { "DO",         DO         },
+    { "OD",         OD         },
+    { "READ",       READ       },
+    { "WRITE",      WRITE      },
+    { "IDENTIFIER", IDENTIFIER },
+    { "CONST",      CONST      },
+    { "L_BRACKET",  L_BRACKET  },
+    { "R_BRACKET",  R_BRACKET  },
+    { "ADD_SUB",    ADD_SUB    },
+    { "MULT_DIV",   MULT_DIV   },
+    { "RELATION",   RELATION   },
+    { "ASSIGN",     ASSIGN     },
+    { "SEMICOLON",  SEMICOLON  }
+  };
+int TokenTypesNumber    = sizeof(  TOKEN_TYPES   ) / sizeof( TOKEN_TYPES[0] );
+
+struct
+  {
+  char*      Name;
+  TOperation Operation;
+  }
+  SM_OPERATIONS[] =
+  {
+     { "STOP",    STOP    },
+     { "LOAD",    LOAD    },
+     { "STORE",   STORE   },
+     { "INVERT",  INVERT  },
+     { "ADD",     ADD     },
+     { "SUB",     SUB     },
+     { "MULT",    MULT    },
+     { "DIV",     DIV     },
+     { "COMPARE", COMPARE },
+     { "JUMP",    JUMP    },
+     { "JUMP_YES",JUMP_YES},
+     { "JUMP_NO", JUNP_NO },
+     { "INPUT",   INPUT   },
+     { "PRINT",   PRINT   }
+  };
+int SMOperationsNumber  = sizeof(  SM_OPERATIONS ) / sizeof( SM_OPERATIONS[0] );
+
+/*---------------------  Lex Analyser ----------------------------*/
+
+const char* SourceFileName;
+const int MaxIdLength = 10;
+
+char IDENTIFIERS[ VARIABLE_MAX ][ MaxIdLength+1 ];
+int IdentifiersCount = 0;
+
+void LexicalAnalyzer()
+  {
+  FILE* fp = fopen( SourceFileName, "rt" );
+  if ( !fp ) Error( "Fatal error: Can't open source file" );
+  c = fgetc( fp );
+  while ( c != EOF )
+    {
+    while ( isspace( c ) )
+      {
+      c = fgetc( fp );
+      if ( c == EOF ) return;
+      }
+    if ( isalpha( c ) )
+      {
+        char Identifier[ MaxIdLength + 1 ];
+        int i = 0;
+
+        do
+          {
+            if ( i < MaxIdLength ) Identifier[ i++ ] = c;
+            c = fgetc( fp );
+          }
+        while ( isalnum( c ) );
+
+        Identifier[ i ] = '\0';
+        for ( i = 0; i < ReservedWordsCount; i++ )
+          if ( !strcmp( Identifier, RESERVED_WORDS[i].Name ) break;
+        if ( i == ReservedWordsCount )
+          {
+             // Identifier
+             // Search in identifiers table
+             for ( i = 0; i < IdentifiersCount; i++ )
+                if ( !strcmp( Identifier, IDENTIFIERS[i] ) ) break;
+             if ( i == IdentifiersCount )
+               {
+                 // Not in table
+                  strcpy( IDENTIFIERS[ IdentifiersCount ], Identifier );
+                  TOKENS[ TokenCounter ].TokenType = IDENTIFIER;
+                  TOKENS[ TokenCounter++ ].Number  = IdentifiersCount++;
+               }
+             else
+               {
+                 // Found in table
+                 TOKENS[ TokenCounter ].TokenType = IDENTIFIER;
+                 TOKENS[ TokenCounter++ ].Number  = i;
+               }
+           }
+        else
+          {
+             // Reserved word of number i
+             TOKENS[ TokenCounter++ ].TokenType = RESERVED_WORDS[i].Type;
+          }
+      }
+    else if ( isdigit( c ) )
+      {
+         int const = c - '0';
+         while ( c = fgets( fp )  )
+          {
+          }
+      }
+    else if ( c == ':' )
+      {
+      }
+    else if ( c == ';' )
+      {
+      }
+    }
+  }
+
+/*---------------------  Synt Analyser ----------------------------*/
+
+void IncreaseOutProgram( TOperation Operation, unsigned Address )
+   {
+        if( ProgramCounter == PROGRAM_MAX )
+             Error( "Too large program" );
+
+	OUTPUT_PROGRAM[ ProgramCounter ].Operation = Operation;
+	OUTPUT_PROGRAM[ ProgramCounter ].Address   = Address;
+	ProgramCounter++;
+	return;
+   }
+
+void Program();
+void StatementList();
+void Statement();
+void Conditional();
+void Expression();
+void Term();
+void Primary();
+
+void Program()
+   {
+	TTokenType  token_type;
+	token_type = TOKENS[ TokenCounter++ ].TokenType;
+	if( token_type != BEGIN )
+		Error( "Program has to be started from 'BEGIN' " );
+
+        StatementList();
+
+	token_type = TOKENS[ TokenCounter++ ].TokenType;
+	if( token_type != END )
+		Error( "Program has to be ended by 'END' " );
+
+        IncreaseOutProgram( STOP, 0);
+        return;
+   }
+
+void StatementList()
+   {
+       TTokenType  token_type;
+       while( TRUE )
+         {
+            Statement();
+            token_type = TOKENS[ TokenCounter ].TokenType;
+            if( token_type != SEMICOLON ) break;
+            TokenCounter++;
+         }
+      return;
+   }
+
+void Statement()
+   {
+	TTokenType token_type;
+	unsigned   address;
+	unsigned   A1;
+	unsigned   A2;
+
+	token_type = TOKENS[ TokenCounter++ ].TokenType;
+	if( token_type == WRITE )
+	   {
+                IncreaseOutProgram( PRINT, TOKENS[ TokenCounter-1 ].Number );
+		return;
+	   }
+	else if( token_type == IDENTIFIER )
+	   {
+		address = TOKENS[ TokenCounter-1 ].Number;
+		token_type = TOKENS[ TokenCounter++ ].TokenType;
+		if( token_type != ASSIGN )
+			Error( "Assignment requires ':=' after identifier" );
+                Expression();
+                IncreaseOutProgram( STORE, address );
+		return;
+	   }
+	else if( token_type == WHILE )
+	   {
+                A1 = ProgramCounter;       // Where control has to be passed
+                Conditional();
+		A2 = ProgramCounter++;     // The hole to place JUMP_NO command
+		token_type = TOKENS[ TokenCounter++ ].TokenType;
+		if( token_type != DO )
+			Error( "WHILE cycle demands 'DO' after condition" );
+                StatementList();
+		token_type = TOKENS[ TokenCounter++ ].TokenType;
+		if( token_type != OD )
+			Error( "WHILE cycle has to be ended by 'OD' " );
+
+                IncreaseOutProgram( JUMP, A1 )
+
+		OUTPUT_PROGRAM[ A2 ].Operation = JUMP_NO;
+		OUTPUT_PROGRAM[ A2 ].Address   = ProgramCounter;
+		return;
+	   }
+	else if( token_type == IF )
+	   {
+                Conditional();
+		A1 = ProgramCounter++;     // The hole to place JUMP_NO command
+		token_type = TOKENS[ TokenCounter++ ].TokenType;
+		if( token_type != THEN )
+			Error( "Conditional demands 'THEN' after condition" );
+                StatementList();
+
+		token_type = TOKENS[ TokenCounter++ ].TokenType;
+		if( token_type == ELSE )
+		   {
+			A2 = ProgramCounter++;     // The hole to place JUMP command
+			OUTPUT_PROGRAM[ A1 ].Operation = JUMP_NO;
+			OUTPUT_PROGRAM[ A1 ].Address   = ProgramCounter;
+                        StatementList();
+			OUTPUT_PROGRAM[ A2 ].Operation = JUMP;
+			OUTPUT_PROGRAM[ A2 ].Address   = ProgramCounter;
+
+                        token_type = TOKENS[ TokenCounter++ ].TokenType;
+                        if( token_type != FI )
+				Error( "Conditional demands 'FI' at the end" );
+			return;
+		else if( token_type != FI )
+                        Error( "Conditional demands 'FI' at the end" );
+                else
+		   {
+			OUTPUT_PROGRAM[ A1 ].Operation = JUMP_NO;
+			OUTPUT_PROGRAM[ A1 ].Address   = ProgramCounter;
+			return;
+		   }
+        else  Error( "Error in statement" );
+   }
+
+void Conditional()
+   {
+	TTokenType token_type;
+	unsigned   number;
+        Expression();
+	token_type = TOKENS[ TokenCounter++ ].TokenType;
+        if( token_type != RELATION )
+		Error( "Conditional requires RELATION after expression" );
+	else
+	   number = TOKENS[ TokenCounter-1 ].Number;
+        Expression();
+        IncreaseOutProgram( COMPARE, number );
+	return;
+   }
+
+void Expression()
+   {
+      TTokenType token_type;
+      unsigned number;
+
+      Term();
+      while( TRUE )
+         {
+            token_type = TOKENS[ TokenCounter ].TokenType;
+            number = TOKENS[ TokenCounter ].Number;
+            if( token_type != ADD_SUB ) break;
+            TokenCounter++;
+            Term();
+            if( number == 0 ) IncreaseOutProgram( ADD, 0 );
+            else IncreaseOutProgram( SUB, 0 );
+         }
+      return;
+   }
+
+void Term()
+   {
+      TTokenType token_type;
+      unsigned number;
+
+      Primary();
+      while( TRUE )
+         {
+            token_type = TOKENS[ TokenCounter ].TokenType;
+            number = TOKENS[ TokenCounter ].Number;
+            if( token_type != MULT_DIV ) break;
+            TokenCounter++;
+            Primary();
+            if( number == 0 ) IncreaseOutProgram( MULT, 0 );
+            else IncreaseOutProgram( DIV, 0 );
+         }
+      return;
+   }
+
+void Primary()
+   {
+	TTokenType token_type;
+        unsigned number;
+
+        token_type = TOKENS[ TokenCounter++ ].TokenType;
+
+        if( token_type == IDENTIFIER )
+	   {
+             IncreaseOutProgram( LOAD, TOKENS[ TokenCounter-1 ].Number );
+             return;
+	   }
+        else if( token_type == CONST )
+	   {
+             IncreaseOutProgram( LOAD,
+                       TOKENS[ TokenCounter-1 ].Number + NumberOfVariables );
+             return;
+           }
+        else if( token_type == READ )
+	   {
+             IncreaseOutProgram( INPUT, 0 );
+             return;
+	   }
+        else if( token_type == L_BRACKET )
+	   {
+             Expression();
+
+             token_type = TOKENS[ TokenCounter++ ].TokenType;
+             if( token_type != R_BRACKET )
+                  Error( "Right bracket is absent" );
+             else
+                return;
+	   }
+        else if ( token_type == ADD_SUB )
+           {
+               number = TOKENS[ TokenCounter-1 ].Number;
+               token_type = TOKENS[ TokenCounter++ ].TokenType;
+               if( token_type != CONST ) Error( "Extra operation" );
+               IncreaseOutProgram( LOAD,
+                       TOKENS[ TokenCounter-1 ].Number + NumberOfVariables );
+               if ( number == 1 ) IncreaseOutProgram( INVERT, 0 );
+               return;
+           }
+        else Error( "Error in expression" );
+   }
+
+/*---------------------  Stack Machine Interpretor ---------------*/
+
+// Будет построен позже
+
+/*-----------------------  Utilites ------------------------------*/
+
+int main( int argc, char* argv[] )
+  {
+    if ( argc != 2 )
+      {
+         Error( "Usage: COMPILER.EXE <source text>" );
+      }
+    SourceFileName = argv[1];
+    LexicalAnalyzer();
+    SyntaxAnalyzer();
+    return ;
+  }
+
+void PrintTokenProgram ()
+  {
+    int i,j;
+    for ( i=0; i < TokenCounter; i++ )
+      {
+        printf( "%3d :  ", i" );
+        for ( j=0; j < TokenTypesNumber; j++ )
+            if ( TOKENS[ i ].TokenType == TOKEN_TYPES[j].Type )
+            {
+              printf( TOKEN_TYPES[ j ] -> Name );
+              break;
+            }
+        printf( "; %3d \n", TOKENS[ i ]. Number )
+  }
+
+void PrintStackMachineProgram()
+  {
+    int i,j;
+    for ( i=0; i < ProgramCounter; i++ )
+      {
+        printf( "%3d :  ", i" );
+        for ( j=0; j < SMOperationsNumber; j++ )
+          if ( OUTPUT_PROGRAM[ i ].Operation == SM_OPERATIONS[ j ].Operation )
+            {
+              printf( SM_OPERATIONS[ j ] -> Name );
+              break;
+            }
+        printf( "; %3d \n", OUTPUT_PROGRAM[ i ]. Address )
+  }
+
+/*---------------------  End Compiler ----------------------------*/

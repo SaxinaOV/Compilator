@@ -1,0 +1,10 @@
+BEGIN
+	X:=0;
+	SWITCH(X) 
+	BEGIN
+		CASE 1:   WRITE(1);
+		CASE 2:   WRITE(2);
+		CASE 3:   WRITE(3);
+		DEFAULT:  WRITE(4);
+	ENDCASE
+END
